@@ -96,10 +96,7 @@ items.sort(key=lambda x: x["pubDate"], reverse=True)
 
 # ==== BUDOWA RSS 2.0 ====
 
-rss = ET.Element("rss", attrib={
-    "version": "2.0",
-    "xmlns:media": "http://search.yahoo.com/mrss/"
-})
+rss = ET.Element("rss", attrib={"version": "2.0"})
 channel = ET.SubElement(rss, "channel")
 ET.SubElement(channel, "title").text = "medonetRSS – agregat (ogólny, dziecko, uroda, żywienie)"
 ET.SubElement(channel, "link").text = "https://www.medonet.pl/"
@@ -119,33 +116,19 @@ for it in items:
     ET.SubElement(item, "pubDate").text = it["pubDate"].strftime("%a, %d %b %Y %H:%M:%S %z")
     ET.SubElement(item, "category").text = it["label"]
 
-    # Klasyczny enclosure
+    # Klasyczny enclosure (RSS 2.0, zgodny z SalesManago)
     ET.SubElement(item, "enclosure", attrib={
         "url": it["image"],
         "length": "0",
         "type": "image/jpeg"
     })
 
-    # Dodatkowy media:content (dla agregatorów z MRSS)
-    ET.SubElement(item, "{http://search.yahoo.com/mrss/}content", attrib={
-        "url": it["image"],
-        "medium": "image"
-    })
-
-# ==== ZAPIS Z PEŁNĄ DEKLARACJĄ XML ====
-
-# Budujemy XML jako string, a następnie ręcznie dopisujemy pierwszą linię,
-# żeby SalesManago nie marudziło na "Brak deklaracji XML".
 # ==== ZAPIS Z DEKLARACJĄ XML DOKŁADNIE WYMUSZONĄ ====
 xml_body = ET.tostring(rss, encoding="utf-8", method="xml").decode("utf-8")
-
-# usuń ewentualne BOM-y i spacje na początku
-xml_body = xml_body.lstrip()
-
-# ręcznie dopisujemy precyzyjną deklarację z podwójnymi cudzysłowami i wielkimi literami UTF-8
+xml_body = xml_body.lstrip()  # usuń spacje przed <rss>
 declaration = '<?xml version="1.0" encoding="UTF-8"?>\n'
 
 with open(OUTPUT_FILE, "w", encoding="utf-8", newline="\n") as f:
     f.write(declaration + xml_body)
 
-print(f"✅ OK: zapisano {OUTPUT_FILE} (pozycje: {len(items)}) z poprawną deklaracją XML")
+print(f"✅ OK: zapisano {OUTPUT_FILE} (pozycje: {len(items)}) z poprawną deklaracją XML i bez media:content")
