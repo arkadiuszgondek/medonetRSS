@@ -6,10 +6,10 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from dateutil import tz
 
-# ---- KONFIG ----
-OUTPUT_FILE = "docs/medonet.xml"
-RETENTION_DAYS = 14
-FALLBACK_IMAGE = "https://sm-cdn.eu/y37kjgxdy0ufdyjt.jpg"
+# ==== KONFIGURACJA ====
+OUTPUT_FILE = "docs/medonet.xml"             # gdzie zapisujemy wynikowy plik
+RETENTION_DAYS = 14                          # ile dni trzymamy wpisy
+FALLBACK_IMAGE = "https://sm-cdn.eu/y37kjgxdy0ufdyjt.jpg"  # domyślny obrazek
 
 FEEDS = [
     ("https://www.medonet.pl/.feed", "ogólny"),
@@ -21,8 +21,10 @@ FEEDS = [
 USER_AGENT = "medonetRSS/1.0 (+https://github.com/arkadiuszgondek/medonetRSS)"
 TIMEZONE_PL = tz.gettz("Europe/Warsaw")
 
-# ---- POMOCNICZE ----
+# ==== FUNKCJE POMOCNICZE ====
+
 def normalize_guid(entry):
+    """Tworzy unikalny identyfikator dla każdego wpisu."""
     guid = getattr(entry, "id", None) or entry.get("guid") or entry.get("link")
     if not guid:
         base = f"{entry.get('title','')}-{entry.get('link','')}"
@@ -30,6 +32,7 @@ def normalize_guid(entry):
     return guid
 
 def entry_datetime(entry):
+    """Pobiera datę publikacji (lub aktualną, jeśli brak)."""
     tm = entry.get("published_parsed") or entry.get("updated_parsed")
     if tm:
         dt = datetime.fromtimestamp(time.mktime(tm), tz=timezone.utc).astimezone(TIMEZONE_PL)
@@ -38,11 +41,12 @@ def entry_datetime(entry):
     return dt
 
 def fetch_feed(url):
+    """Pobiera i parsuje RSS."""
     feedparser.USER_AGENT = USER_AGENT
     return feedparser.parse(url)
 
 def extract_image(entry):
-    # Priorytet: enclosure → media_content → media_thumbnail → fallback
+    """Wybiera URL obrazka (enclosure, media, thumbnail lub fallback)."""
     url = None
     if "enclosures" in entry and entry.enclosures:
         url = entry.enclosures[0].get("url")
@@ -51,12 +55,12 @@ def extract_image(entry):
     elif "media_thumbnail" in entry and entry.media_thumbnail:
         url = entry.media_thumbnail[0].get("url")
 
-    # czasem puste lub dziwne znaki
     if not url or not url.startswith("http"):
         url = FALLBACK_IMAGE
     return url
 
-# ---- POBIERZ I POŁĄCZ ----
+# ==== POBIERANIE I AGREGACJA ====
+
 items = []
 seen = set()
 
@@ -84,12 +88,14 @@ for url, label in FEEDS:
             "image": img_url
         })
 
-# ---- FILTR RETENCJI I SORT ----
+# ==== FILTR RETENCJI I SORTOWANIE ====
+
 cutoff = datetime.now(TIMEZONE_PL) - timedelta(days=RETENTION_DAYS)
 items = [it for it in items if it["pubDate"] >= cutoff]
 items.sort(key=lambda x: x["pubDate"], reverse=True)
 
-# ---- BUDOWA RSS 2.0 ----
+# ==== BUDOWA RSS 2.0 ====
+
 rss = ET.Element("rss", attrib={
     "version": "2.0",
     "xmlns:media": "http://search.yahoo.com/mrss/"
@@ -113,18 +119,27 @@ for it in items:
     ET.SubElement(item, "pubDate").text = it["pubDate"].strftime("%a, %d %b %Y %H:%M:%S %z")
     ET.SubElement(item, "category").text = it["label"]
 
-    # Dodaj klasyczny enclosure
+    # Klasyczny enclosure
     ET.SubElement(item, "enclosure", attrib={
         "url": it["image"],
         "length": "0",
         "type": "image/jpeg"
     })
-    # oraz media:content (lepsza zgodność z agregatorami)
+
+    # Dodatkowy media:content (dla agregatorów z MRSS)
     ET.SubElement(item, "{http://search.yahoo.com/mrss/}content", attrib={
         "url": it["image"],
         "medium": "image"
     })
 
-tree = ET.ElementTree(rss)
-tree.write(OUTPUT_FILE, encoding="utf-8", xml_declaration=True)
-print(f"OK: zapisano {OUTPUT_FILE} (pozycje: {len(items)}) z repo medonetRSS")
+# ==== ZAPIS Z PEŁNĄ DEKLARACJĄ XML ====
+
+# Budujemy XML jako string, a następnie ręcznie dopisujemy pierwszą linię,
+# żeby SalesManago nie marudziło na "Brak deklaracji XML".
+xml_body = ET.tostring(rss, encoding="utf-8", method="xml").decode("utf-8")
+
+with open(OUTPUT_FILE, "wb") as f:
+    f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
+    f.write(xml_body.encode("utf-8"))
+
+print(f"✅ OK: zapisano {OUTPUT_FILE} (pozycje: {len(items)}) z repo medonetRSS")
