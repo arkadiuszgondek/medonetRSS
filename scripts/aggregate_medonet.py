@@ -136,10 +136,16 @@ for it in items:
 
 # Budujemy XML jako string, a następnie ręcznie dopisujemy pierwszą linię,
 # żeby SalesManago nie marudziło na "Brak deklaracji XML".
+# ==== ZAPIS Z DEKLARACJĄ XML DOKŁADNIE WYMUSZONĄ ====
 xml_body = ET.tostring(rss, encoding="utf-8", method="xml").decode("utf-8")
 
-with open(OUTPUT_FILE, "wb") as f:
-    f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
-    f.write(xml_body.encode("utf-8"))
+# usuń ewentualne BOM-y i spacje na początku
+xml_body = xml_body.lstrip()
 
-print(f"✅ OK: zapisano {OUTPUT_FILE} (pozycje: {len(items)}) z repo medonetRSS")
+# ręcznie dopisujemy precyzyjną deklarację z podwójnymi cudzysłowami i wielkimi literami UTF-8
+declaration = '<?xml version="1.0" encoding="UTF-8"?>\n'
+
+with open(OUTPUT_FILE, "w", encoding="utf-8", newline="\n") as f:
+    f.write(declaration + xml_body)
+
+print(f"✅ OK: zapisano {OUTPUT_FILE} (pozycje: {len(items)}) z poprawną deklaracją XML")
